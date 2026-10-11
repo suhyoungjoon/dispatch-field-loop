@@ -40,3 +40,13 @@ def test_compute_rates():
 
 def test_compute_empty():
     assert compute([], promise_window_min=30)["orders"] == 0
+
+
+def test_arrival_delay_metrics():
+    records = [rec(str(i), "completed") for i in range(10)]
+    for i, r in enumerate(records):
+        r.arrival_delay_min = i * 10               # 0, 10, ..., 90
+    records.append(rec("x", "unserved"))           # 도착하지 않은 건은 빼고 계산
+    m = compute(records, promise_window_min=60)
+    assert m["avg_arrival_delay_min"] == pytest.approx(45)
+    assert m["p90_arrival_delay_min"] == 90

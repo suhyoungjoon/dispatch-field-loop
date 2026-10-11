@@ -38,7 +38,10 @@ def compare(base_params: dict, instance, candidates: list[dict], worlds: dict[st
     """반환: {candidate_id: {"name", "plan", "outcome": {profile: 평균 지표}}}. 같은 seed를 모든 개선안에 쓴다."""
     out = {}
     for cand in candidates:
-        params = apply_params(base_params, cand["proposal"]) if cand["proposal"] else base_params
+        if "params" in cand:                       # 보정 승인 등으로 이미 만든 params
+            params = cand["params"]
+        else:
+            params = apply_params(base_params, cand["proposal"]) if cand["proposal"] else base_params
         pack = get_pack(params)
         decisions = pack.solve(instance, params)
         per_profile = {}

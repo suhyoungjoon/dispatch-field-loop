@@ -1,6 +1,6 @@
-"""N2 비교표를 만든다.
+"""실적 비교표를 만든다 (N2 고객 반응·이월 + N3 실행 편차·보정 제안).
 
-    python -m outcome.report --out docs/n2-outcome-compare.md --json runs/n2_compare.json
+    python -m outcome.report --out docs/n3-outcome-compare.md --json runs/n3_compare.json
 """
 
 import argparse
@@ -14,7 +14,10 @@ import yaml
 from core import load_params
 from domains.dispatch import get_pack
 
+from outcome.aggregate import duration_ratio, travel_ratio
+from outcome.calibration import apply_calibration, approve, check
 from outcome.compare import compare, recommendation
+from world.carryover import simulate_outcomes
 from world.config import load_world, world_errors
 
 REPO = Path(__file__).resolve().parents[1]
@@ -40,7 +43,7 @@ def pct(x: float) -> str:
 
 
 def render(result: dict, meta: dict, recs: list[dict]) -> str:
-    lines = ["# N2 실적 비교: 기존 개선안의 고객 결과", "",
+    lines = ["# 실적 비교: 기존 개선안의 고객 결과 (N3: 실행 편차 포함)", "",
              f"- 생성: {meta['date']}, 코어 `{meta['core_ref'][:7]}`, 이 레포 `{meta['repo_ref']}`",
              f"- 데이터 seed {meta['data']['seed']}, 결함 {', '.join(meta['data']['faults'])}, params v{meta['params_version']}",
              f"- 실적 seed {meta['seeds']} 평균 (모든 개선안에 같은 seed = 공통 난수), 세상 프로필 {', '.join(PROFILE_KO[p] for p in PROFILES)}",
@@ -53,14 +56,15 @@ def render(result: dict, meta: dict, recs: list[dict]) -> str:
         lines.append(f"| {r['name']} | {p['assigned']:,} | {p['on_time']:,} | {p['violations']} | {p['avg_travel_min']:.1f}분 |")
     for prof in PROFILES:
         lines += ["", f"## 실적 지표: {PROFILE_KO[prof]} 세상", "",
-                  "| 개선안 | 약속 준수 | 불만 없이 완료 | 완료율 | 불만율 (개통 / 장애) | 취소율 | 미처리 | 평균 이월 |",
-                  "|---|---|---|---|---|---|---|---|"]
+                  "| 개선안 | 약속 준수 | 불만 없이 완료 | 완료율 | 불만율 (개통 / 장애) | 취소율 | 미처리 | 평균 이월 | 도착 지연 평균 / 상위10% |",
+                  "|---|---|---|---|---|---|---|---|---|"]
         for r in result.values():
             o = r["outcome"][prof]
             lines.append(f"| {r['name']} | {o['promise_kept']:,.0f} ({pct(o['promise_kept_rate'])}) "
                          f"| {o['completed_no_complaint']:,.0f} | {pct(o['completion_rate'])} "
                          f"| {pct(o['complaint_rate'])} ({pct(o['complaint_rate_install'])} / {pct(o['complaint_rate_repair'])}) "
-                         f"| {pct(o['cancel_rate'])} | {pct(o['unserved_rate'])} | {o['avg_carry_days']:.2f}일 |")
+                         f"| {pct(o['cancel_rate'])} | {pct(o['unserved_rate'])} | {o['avg_carry_days']:.2f}일 "
+                         f"| {o['avg_arrival_delay_min']:.1f} / {o['p90_arrival_delay_min']:.0f}분 |")
     lines += ["", "## 프로필별 최고안 (표시 규칙, 결정은 사람이 한다)", "",
               f"1·2위 차이가 {meta['tie_margin_pp']}%p 미만인 프로필은 동률로 보고, 동률이 아닌 같은 최고안이 "
               f"{meta['min_profiles_agree']}개 이상 프로필에서 나올 때만 추천으로 표시한다.", "",
@@ -75,17 +79,40 @@ def render(result: dict, meta: dict, recs: list[dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def render_n3(n3: dict) -> str:
+    lines = ["", "## N3: 실행 편차 집계 (보통 세상, 현재 v1, 실적 seed 1)", "",
+             "집계는 실적 레코드만 본다. 세상 설정의 출퇴근 시간대 정의는 쓰지 않고 출발 시(時)로 묶는다.", "",
+             "| 난이도 | 건수 | 실제/추정 소요 (평균) |", "|---|---|---|"]
+    for g, row in n3["duration"].items():
+        lines.append(f"| {g} | {row['n']} | {row['mean_ratio']:.3f} |")
+    lines += ["", "| 출발 시 | 건수 | 실제/추정 이동 (평균) |", "|---|---|---|"]
+    for g, row in n3["travel"].items():
+        lines.append(f"| {g} | {row['n']} | {row['mean_ratio']:.3f} |")
+    lines += ["", "## N3: 추정값 보정 제안 검사 (예시 제안, 코드 검사 결과)", "",
+              "| 제안 | 근거 | 결과 | 사유 |", "|---|---|---|---|"]
+    for ex in n3["checks"]:
+        p = ex["item"]["proposal"]
+        ev = p.get("evidence")
+        ev_text = f"{ev['table']} / {ev['group_by']}={ev['group']}" if ev else "없음"
+        lines.append(f"| {ex['label']}: `{p['path']}.{p.get('key')}` {ex['item']['current_value']} → {p['value']} "
+                     f"| {ev_text} | {ex['item']['status']} | {'; '.join(ex['item']['errors']) or '-'} |")
+    lines += ["", f"승인 예시: 위 ①을 `{n3['approved']['approver']}`가 승인했다고 두고 params 사본에 반영해 "
+              "위 실적 표의 '현재 + 승주 보정' 행을 만들었다. 파일(params.yaml)은 바꾸지 않았다."]
+    return "\n".join(lines) + "\n"
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--candidates", default=str(REPO / "settings" / "n2_candidates.yaml"))
     ap.add_argument("--flow", default=str(REPO / "settings" / "flow.yaml"))
     ap.add_argument("--profiles-dir", default=str(REPO / "world" / "profiles"))
-    ap.add_argument("--out", default=str(REPO / "docs" / "n2-outcome-compare.md"))
-    ap.add_argument("--json", default=str(REPO / "runs" / "n2_compare.json"))
+    ap.add_argument("--out", default=str(REPO / "docs" / "n3-outcome-compare.md"))
+    ap.add_argument("--json", default=str(REPO / "runs" / "n3_compare.json"))
     args = ap.parse_args(argv)
 
     cfg = yaml.safe_load(open(args.candidates, encoding="utf-8"))
-    flow = yaml.safe_load(open(args.flow, encoding="utf-8"))["outcome"]
+    flow_all = yaml.safe_load(open(args.flow, encoding="utf-8"))
+    flow = flow_all["outcome"]
     worlds = {p: load_world(Path(args.profiles_dir) / f"world_{p}.yaml") for p in PROFILES}
     for p, w in worlds.items():
         if errors := world_errors(w):
@@ -94,7 +121,25 @@ def main(argv=None):
     pack = get_pack()
     base = load_params(pack)
     instance, _ = pack.generate(cfg["data"]["seed"], cfg["data"]["faults"])
-    result = compare(base, instance, cfg["candidates"], worlds, flow["seeds"], flow["promise_window_min"])
+    # N3: 현재 계획의 실행 편차 집계와 보정 제안 검사 (보통 세상, seed 1)
+    calib = flow_all["calibration"]
+    records = simulate_outcomes(instance, pack.solve(instance, base), base, worlds["normal"], flow["seeds"][0])
+    pole_ev = {"table": "duration_ratio", "group_by": "difficulty", "group": "pole"}
+    examples = [
+        ("① 실적 근거 있음", {"path": "weights.difficulty", "key": "pole", "value": 1.9, "source": "예시",
+                            "evidence": pole_ev}),
+        ("② 근거 없음", {"path": "weights.difficulty", "key": "pole", "value": 1.9, "source": "예시"}),
+        ("③ 근거와 반대 방향", {"path": "weights.difficulty", "key": "pole", "value": 1.2, "source": "예시",
+                             "evidence": pole_ev}),
+    ]
+    checks = [{"label": label, "item": check(base, prop, records, calib)} for label, prop in examples]
+    approved = approve(checks[0]["item"], approver="예시 승인자", note="보고서 예시")
+    candidates = cfg["candidates"] + [{"id": "calib_pole", "name": "현재 + 승주 보정 (추정 1.5 → 1.9)",
+                                       "params": apply_calibration(base, approved)}]
+    n3 = {"duration": duration_ratio(records, "difficulty"), "travel": travel_ratio(records, "depart_hour"),
+          "checks": checks, "approved": approved}
+
+    result = compare(base, instance, candidates, worlds, flow["seeds"], flow["promise_window_min"])
     tie = flow["tie_margin_pp"] / 100
     recs = [{**recommendation(result, list(PROFILES), key, flow["min_profiles_agree"], tie), "label": label}
             for key, label in (("promise_kept_rate", "약속 준수"), ("completed_no_complaint_rate", "불만 없이 완료"))]
@@ -106,8 +151,8 @@ def main(argv=None):
             "json": Path(args.json).relative_to(REPO).as_posix() if Path(args.json).is_relative_to(REPO) else args.json}
     Path(args.json).parent.mkdir(parents=True, exist_ok=True)
     Path(args.json).write_text(json.dumps({"meta": meta, "candidates": cfg["candidates"], "result": result,
-                                           "recommendations": recs}, ensure_ascii=False, indent=2))
-    Path(args.out).write_text(render(result, meta, recs), encoding="utf-8")
+                                           "recommendations": recs, "n3": n3}, ensure_ascii=False, indent=2))
+    Path(args.out).write_text(render(result, meta, recs) + render_n3(n3), encoding="utf-8")
     print(Path(args.out).read_text(encoding="utf-8"))
 
 

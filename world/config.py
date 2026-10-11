@@ -42,4 +42,25 @@ def world_errors(world: dict) -> list[str]:
     per_day = carry.get("per_day", {})
     if set(per_day) != {"complain", "cancel"} or any(v < 0 for v in per_day.values()):
         errors.append("carryover.per_day: complain·cancel 가산(0 이상)이 필요하다")
+    if "execution" in world:
+        errors += _execution_errors(world["execution"])
+    return errors
+
+
+def _execution_errors(ex: dict) -> list[str]:
+    errors = []
+    d, t = ex.get("duration", {}), ex.get("travel", {})
+    for key, names in (("base_min", WORK_TYPES), ("building", BUILDING_TYPES),
+                       ("difficulty", ("none", "pole", "outdoor", "high_risk"))):
+        values = d.get(key, {})
+        if any(not isinstance(values.get(n), (int, float)) or values[n] <= 0 for n in names):
+            errors.append(f"execution.duration.{key}: {list(names)} 양수가 필요하다")
+    for key in ("avg_speed_kmh", "detour_factor", "rush_speed_factor"):
+        if not isinstance(t.get(key), (int, float)) or t[key] <= 0:
+            errors.append(f"execution.travel.{key}: 양수가 필요하다")
+    if any(len(w) != 2 or w[0] >= w[1] for w in t.get("rush_hours", [])):
+        errors.append("execution.travel.rush_hours: [시작분, 종료분) 목록이어야 한다")
+    for section, key in ((d, "duration"), (t, "travel")):
+        if not isinstance(section.get("noise_sd"), (int, float)) or section["noise_sd"] < 0:
+            errors.append(f"execution.{key}.noise_sd: 0 이상 숫자가 필요하다")
     return errors
