@@ -1,0 +1,16 @@
+[project]
+name = "dispatch-field-loop"
+version = "0.0.0"
+requires-python = ">=3.11"
+dependencies = [
+    # 코어는 커밋 SHA로 고정한다 (docs/core-pin.md). N1에서 채운다.
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools]
+packages = ["world", "outcome", "dialogue", "flow"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
