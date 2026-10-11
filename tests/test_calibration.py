@@ -36,7 +36,7 @@ def test_duration_ratio_finds_p6(records):
 
 
 def test_travel_ratio_by_depart_hour_shows_rush(records):
-    table = travel_ratio(records, "depart_hour")     # 집계는 세상 설정(출퇴근 시간대)을 모른다
+    table = travel_ratio(records, "depart_hour")     # 집계는 현실 모델 설정(출퇴근 시간대)을 모른다
     rush = [table[h]["mean_ratio"] for h in ("08", "09") if h in table]
     calm = [table[h]["mean_ratio"] for h in ("11", "12", "13", "14") if h in table]
     assert rush and calm

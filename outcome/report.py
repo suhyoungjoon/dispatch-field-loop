@@ -46,7 +46,7 @@ def render(result: dict, meta: dict, recs: list[dict]) -> str:
     lines = ["# 실적 비교: 기존 개선안의 고객 결과 (N3: 실행 편차 포함)", "",
              f"- 생성: {meta['date']}, 코어 `{meta['core_ref'][:7]}`, 이 레포 `{meta['repo_ref']}`",
              f"- 데이터 seed {meta['data']['seed']}, 결함 {', '.join(meta['data']['faults'])}, params v{meta['params_version']}",
-             f"- 실적 seed {meta['seeds']} 평균 (모든 개선안에 같은 seed = 공통 난수), 세상 프로필 {', '.join(PROFILE_KO[p] for p in PROFILES)}",
+             f"- 실적 seed {meta['seeds']} 평균 (모든 개선안에 같은 seed = 공통 난수), 현실 모델 프로필 {', '.join(PROFILE_KO[p] for p in PROFILES)}",
              f"- 약속 준수 = 원래 희망 날짜에, 희망 시각 ±{meta['promise_window_min']}분 안에 완료 (불만이 있어도 완료로 셈)",
              f"- 실행 메타데이터 전체: `{meta['json']}`", "",
              "## 계획 지표 (규칙 엔진, 하루 한 번 배정)", "",
@@ -55,7 +55,7 @@ def render(result: dict, meta: dict, recs: list[dict]) -> str:
         p = r["plan"]
         lines.append(f"| {r['name']} | {p['assigned']:,} | {p['on_time']:,} | {p['violations']} | {p['avg_travel_min']:.1f}분 |")
     for prof in PROFILES:
-        lines += ["", f"## 실적 지표: {PROFILE_KO[prof]} 세상", "",
+        lines += ["", f"## 실적 지표: 현실 모델 {PROFILE_KO[prof]}", "",
                   "| 개선안 | 약속 준수 | 불만 없이 완료 | 완료율 | 불만율 (개통 / 장애) | 취소율 | 미처리 | 평균 이월 | 도착 지연 평균 / 상위10% |",
                   "|---|---|---|---|---|---|---|---|---|"]
         for r in result.values():
@@ -80,8 +80,8 @@ def render(result: dict, meta: dict, recs: list[dict]) -> str:
 
 
 def render_n3(n3: dict) -> str:
-    lines = ["", "## N3: 실행 편차 집계 (보통 세상, 현재 v1, 실적 seed 1)", "",
-             "집계는 실적 레코드만 본다. 세상 설정의 출퇴근 시간대 정의는 쓰지 않고 출발 시(時)로 묶는다.", "",
+    lines = ["", "## N3: 실행 편차 집계 (현실 모델 보통, 현재 v1, 실적 seed 1)", "",
+             "집계는 실적 레코드만 본다. 현실 모델 설정의 출퇴근 시간대 정의는 쓰지 않고 출발 시(時)로 묶는다.", "",
              "| 난이도 | 건수 | 실제/추정 소요 (평균) |", "|---|---|---|"]
     for g, row in n3["duration"].items():
         lines.append(f"| {g} | {row['n']} | {row['mean_ratio']:.3f} |")
@@ -121,7 +121,7 @@ def main(argv=None):
     pack = get_pack()
     base = load_params(pack)
     instance, _ = pack.generate(cfg["data"]["seed"], cfg["data"]["faults"])
-    # N3: 현재 계획의 실행 편차 집계와 보정 제안 검사 (보통 세상, seed 1)
+    # N3: 현재 계획의 실행 편차 집계와 보정 제안 검사 (현실 모델 보통, seed 1)
     calib = flow_all["calibration"]
     records = simulate_outcomes(instance, pack.solve(instance, base), base, worlds["normal"], flow["seeds"][0])
     pole_ev = {"table": "duration_ratio", "group_by": "difficulty", "group": "pole"}

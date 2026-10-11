@@ -1,4 +1,4 @@
-"""세상 설정(world_*.yaml) 읽기와 형식 검사. 경로는 항상 인자로 받는다."""
+"""현실 모델 설정(world_*.yaml) 읽기와 형식 검사. 경로는 항상 인자로 받는다."""
 
 from pathlib import Path
 
