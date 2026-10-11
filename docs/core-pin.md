@@ -10,5 +10,5 @@
 
 - 기준값: seed 42, P1~P4, 기본 params(v1) → 배정 1,040 / 정시(`on_time_rate` × 1,500) 741 / 위반 0.
 - API 키: 코어 `AnthropicClient`는 `OAH_ANTHROPIC_API_KEY`를 먼저, 없으면 `ANTHROPIC_API_KEY`를 읽는다. 키 파일 경로는 `env_path`로 넘긴다.
-- `analyze(pack, instance, decisions, llm, llm_config, salt, max_calls, memory_text, perspective)`에는 **외부 도구 인자가 없다.** 도구는 `Aggregator(...).tools() + pack.analysis_tools(instance, decisions)`로 정해진다. N4 전에 처리 방법을 정한다 (코어 변경 요청 또는 팩 감싸기).
+- `analyze(pack, instance, decisions, llm, llm_config, salt, max_calls, memory_text, perspective)`에는 **외부 도구 인자가 없다.** 도구는 `Aggregator(...).tools() + pack.analysis_tools(instance, decisions)`로 정해진다. N4에서 팩 래퍼(`outcome/analysis_pack.py`)로 `analysis_tools`에 실적 도구를 더하기로 했다 (plan 6장 결정 #6).
 - `tests/fake_llm.py`는 이 SHA의 `tests/fake_llm.py`를 그대로 복사했다.

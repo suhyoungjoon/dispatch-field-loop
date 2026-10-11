@@ -35,12 +35,18 @@ execution:                         # 실제 작업소요·이동. 추정값(para
     rush_speed_factor: 0.7                    # 출퇴근 시간대 이동이 느리다 (P6)
     noise_sd: 0.2
 
-truth:
+truth:                             # 채점용 정답 (코어 fault_scorer answer 형식). 분석 agent에게 주지 않는다
   P5:
     name: 장애 고객 지연 민감
-    answer: {dims: {work_type: repair}, outcome_metric: complaint_rate, direction: high, delay_over_min: 30}
-  P6:
-    name: 승주 작업 소요 과소 추정, 출퇴근 시간대 이동 지연
-    answer:
-      duration: {dims: {difficulty: pole}, actual_over_estimate: 1.25}
-      travel: {rush_hours: [[480, 600], [1020, 1140]], speed_factor: 0.7}
+    answer: {dims: {work_type: repair}, requires_tools: [outcome_by_group]}
+    detail: {outcome_metric: complaint_rate, direction: high, delay_over_min: 30}
+  P6a:
+    name: 승주 작업 소요 과소 추정
+    answer: {dims: {difficulty: pole}, requires_tools: [duration_ratio]}
+    detail: {actual_over_estimate: 1.25}
+  P6b:
+    name: 출퇴근 시간대 이동 지연
+    # hour는 고객 희망 시각의 시다. 08~10시 출발은 대체로 09~10시 희망 건이라 그것으로 근사한다 (N4 결정 (가)).
+    # 실측: 09시 희망 건 실제/추정 이동 약 1.34, 10시 약 1.09, 그 밖 약 1.0. 구간이 겹치면 맞힌 것으로 본다
+    answer: {dims: {hour: ["09", "10"]}, requires_tools: [travel_ratio]}
+    detail: {rush_hours: [[480, 600], [1020, 1140]], speed_factor: 0.7}

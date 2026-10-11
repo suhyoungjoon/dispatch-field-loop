@@ -39,7 +39,7 @@ def test_p6_truth_in_every_profile(name, scenario):
     assert ex["travel"]["avg_speed_kmh"] == params["travel"]["avg_speed_kmh"]
     assert ex["travel"]["rush_speed_factor"] == 0.7
     assert [480, 600] in ex["travel"]["rush_hours"] and [1020, 1140] in ex["travel"]["rush_hours"]
-    assert world["truth"]["P6"]["answer"]["duration"]["actual_over_estimate"] == 1.25
+    assert world["truth"]["P6a"]["detail"]["actual_over_estimate"] == 1.25
 
 
 def test_true_duration_pole_is_25_percent_longer(scenario):
