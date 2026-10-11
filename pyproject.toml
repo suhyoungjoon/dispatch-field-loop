@@ -9,6 +9,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest"]
+ui = ["streamlit>=1.40"]          # N6 screen
 
 [tool.setuptools]
 packages = ["world", "outcome", "dialogue", "flow"]

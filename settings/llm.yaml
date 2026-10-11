@@ -11,6 +11,7 @@ max_tokens: 16000
 # 정했다 (docs/experiment-real-api-2026-10.md 6.9절: 분석은 Haiku 5.5로 충분, 개선안은 Opus 5.5가 확실히 나음)
 roles:
   analysis: {model: claude-haiku-5-5, thinking: adaptive, effort: medium}
+  dialogue: {model: claude-haiku-5-5, thinking: adaptive, effort: medium}   # 이 레포 추가 (N6): 현장 의견 대화
   proposals: {model: claude-opus-5-5, thinking: adaptive, effort: medium}
 max_llm_calls_per_item: 12     # 한 항목에서 도구 호출 루프가 끝나지 않을 때 끊는 상한
 concurrency: 4                 # 동시에 실행할 run 수 (레벨·반복)
