@@ -1,0 +1,23 @@
+# N2 비교 대상 개선안. 출처: 코어 레포 docs/experiment-real-api-2026-10.md 6.4·6.5절 (@de3e755)
+# 데이터: seed 42, 결함 P1~P4, 기본 params v1
+data: {seed: 42, faults: [P1, P2, P3, P4]}
+candidates:
+  - id: current
+    name: 현재 (v1)
+    proposal: {}
+  - id: area4
+    name: 관할 4km (후보 A)
+    proposal:
+      params_changes: [{path: "matching.area_extension_km[2]", value: 4}]
+  - id: human_c
+    name: 사람 수정안 C (관할 4km + 10시 3단계 시간창 90분)
+    proposal:
+      params_changes: [{path: "matching.area_extension_km[2]", value: 4}]
+      override_rules: [{when: {hour: ["10"]}, set: {"matching.time_window_min[2]": 90}}]
+  - id: ai_original
+    name: AI 원안 (prop-897f8a05, 재구성)
+    proposal:      # 문서의 변경 3줄로 재구성. 1,240 / 659로 문서 수치와 같다
+      params_changes:
+        - {path: "matching.area_extension_km[2]", value: 5}
+        - {path: "matching.time_window_min[2]", value: 90}
+      override_rules: [{when: {hour: ["10"]}, set: {"matching.time_window_min": [0, 60, 120]}}]
