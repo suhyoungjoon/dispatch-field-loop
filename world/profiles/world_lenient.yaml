@@ -1,0 +1,52 @@
+# 현실 모델 설정 (관대). AI에게 보여 주지 않는 정답표다. 프롬프트·도구 결과에 이 파일 원문을 넣지 않는다.
+profile: lenient
+
+response:
+  bands_min: [0, 30, 60, 90]
+  tolerance_shift_min: {house: 0, apartment: 5}
+  by_work_type:
+    install:
+      - {accept: 0.98, complain: 0.01, reschedule: 0.01, cancel: 0.00}
+      - {accept: 0.96, complain: 0.02, reschedule: 0.02, cancel: 0.00}
+      - {accept: 0.92, complain: 0.04, reschedule: 0.04, cancel: 0.00}
+      - {accept: 0.78, complain: 0.11, reschedule: 0.09, cancel: 0.02}
+      - {accept: 0.60, complain: 0.20, reschedule: 0.15, cancel: 0.05}
+    repair:                        # P5는 약하게라도 남긴다
+      - {accept: 0.97, complain: 0.02, reschedule: 0.01, cancel: 0.00}
+      - {accept: 0.90, complain: 0.06, reschedule: 0.04, cancel: 0.00}
+      - {accept: 0.60, complain: 0.28, reschedule: 0.09, cancel: 0.03}
+      - {accept: 0.45, complain: 0.37, reschedule: 0.12, cancel: 0.06}
+      - {accept: 0.30, complain: 0.45, reschedule: 0.15, cancel: 0.10}
+
+carryover:
+  max_carry_days: 2
+  per_day: {complain: 0.05, cancel: 0.02}
+
+execution:                         # 실제 작업소요·이동. 추정값(params)과 독립된 '진짜' 값이다 (P6)
+  duration:                        # 실제 소요 = base × difficulty × building × 잡음
+    base_min: {install: 60, repair: 45}
+    difficulty: {none: 1.0, pole: 1.875, outdoor: 1.2, high_risk: 1.8}   # 승주는 추정(1.5)보다 25% 길다
+    building: {house: 1.0, apartment: 1.1}
+    noise_sd: 0.05                  # 로그정규 잡음 (평균 1)
+  travel:                          # 실제 이동 = 도로 거리 / (속도 × 출퇴근 배율) × 잡음
+    avg_speed_kmh: 30
+    detour_factor: 1.3
+    rush_hours: [[480, 600], [1020, 1140]]   # 08~10시, 17~19시 (출발 시각 기준)
+    rush_speed_factor: 0.7                    # 출퇴근 시간대 이동이 느리다 (P6)
+    noise_sd: 0.1
+
+truth:                             # 채점용 정답 (코어 fault_scorer answer 형식). 분석 agent에게 주지 않는다
+  P5:
+    name: 장애 고객 지연 민감
+    answer: {dims: {work_type: repair}, requires_tools: [outcome_by_group]}
+    detail: {outcome_metric: complaint_rate, direction: high, delay_over_min: 30}
+  P6a:
+    name: 승주 작업 소요 과소 추정
+    answer: {dims: {difficulty: pole}, requires_tools: [duration_ratio]}
+    detail: {actual_over_estimate: 1.25}
+  P6b:
+    name: 출퇴근 시간대 이동 지연
+    # hour는 고객 희망 시각의 시다. 08~10시 출발은 대체로 09~10시 희망 건이라 그것으로 근사한다 (N4 결정 (가)).
+    # 실측: 09시 희망 건 실제/추정 이동 약 1.34, 10시 약 1.09, 그 밖 약 1.0. 구간이 겹치면 맞힌 것으로 본다
+    answer: {dims: {hour: ["09", "10"]}, requires_tools: [travel_ratio]}
+    detail: {rush_hours: [[480, 600], [1020, 1140]], speed_factor: 0.7}

@@ -3,11 +3,13 @@ name = "dispatch-field-loop"
 version = "0.0.0"
 requires-python = ">=3.11"
 dependencies = [
-    # 코어는 커밋 SHA로 고정한다 (docs/core-pin.md). N1에서 채운다.
+    # 코어는 커밋 SHA로 고정한다. 올릴 때는 docs/core-pin.md에 기록한다.
+    "optimization-agent-harness @ git+https://github.com/suhyoungjoon/optimization-agent-harness.git@de3e755ee50235cb36242b0af8f91e284e9072a2",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest"]
+ui = ["streamlit>=1.40"]          # N6 screen
 
 [tool.setuptools]
 packages = ["world", "outcome", "dialogue", "flow"]

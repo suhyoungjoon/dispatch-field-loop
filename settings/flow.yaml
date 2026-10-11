@@ -1,0 +1,15 @@
+# 통합 흐름 상한·판정 기준. 현실 모델 설정이 아니라 우리가 정한 평가 기준이다.
+outcome:
+  promise_window_min: 60        # 약속 준수: 원래 희망 날짜에, 희망 시각 ±이 값 안에 완료
+  seeds: [1, 2, 3, 4, 5]        # 비교표에서 평균을 내는 실적 seed (전후 비교는 같은 seed = 공통 난수)
+  min_profiles_agree: 2         # 결론이 몇 개 프로필에서 같아야 "추천"으로 표시하는지 (원칙 6)
+  tie_margin_pp: 1.0            # 한 프로필 안에서 1·2위 차이가 이 값(%p) 미만이면 동률로 보고 최고안을 정하지 않는다
+
+calibration:                    # 추정값 보정 제안 검사 (원칙 3: 실적 근거로만 바꾼다)
+  min_samples: 30               # 근거 집계 구간의 최소 실적 건수
+  ratio_tolerance: 0.10         # 제안 배율(새 값 / 현재 값)과 실적 배율(실제 / 추정)의 허용 차이
+  evidence:                     # 추정값 경로 → 근거로 받을 실적 집계. key가 있으면 그 값이 집계 구간
+    weights.difficulty: {table: duration_ratio, group_by: difficulty}
+    weights.building:   {table: duration_ratio, group_by: building_type}
+    duration.base_min:  {table: duration_ratio, group_by: work_type}
+    travel.avg_speed_kmh: {table: travel_ratio, group_by: depart_hour, inverse: true}   # 속도는 시간과 반비례. 키가 없으니 구간은 all
