@@ -62,12 +62,15 @@ def render(result: dict, meta: dict, recs: list[dict]) -> str:
                          f"| {pct(o['complaint_rate'])} ({pct(o['complaint_rate_install'])} / {pct(o['complaint_rate_repair'])}) "
                          f"| {pct(o['cancel_rate'])} | {pct(o['unserved_rate'])} | {o['avg_carry_days']:.2f}일 |")
     lines += ["", "## 프로필별 최고안 (표시 규칙, 결정은 사람이 한다)", "",
+              f"1·2위 차이가 {meta['tie_margin_pp']}%p 미만인 프로필은 동률로 보고, 동률이 아닌 같은 최고안이 "
+              f"{meta['min_profiles_agree']}개 이상 프로필에서 나올 때만 추천으로 표시한다.", "",
               "| 기준 | " + " | ".join(PROFILE_KO[p] for p in PROFILES) + " | 추천 |",
               "|---|" + "---|" * len(PROFILES) + "---|"]
     for rec in recs:
-        winners = " | ".join(result[rec["winners"][p]]["name"] for p in PROFILES)
+        winners = " | ".join(result[rec["winners"][p]]["name"] if rec["winners"][p] else "동률"
+                             for p in PROFILES)
         verdict = (f"**{result[rec['recommended']]['name']}** ({rec['agree']}/{len(PROFILES)} 프로필 일치)"
-                   if rec["recommended"] else f"보류 (일치 {rec['agree']}개 < {meta['min_profiles_agree']})")
+                   if rec["recommended"] else f"보류 (동률이 아닌 일치 {rec['agree']}개 < {meta['min_profiles_agree']})")
         lines.append(f"| {rec['label']} | {winners} | {verdict} |")
     return "\n".join(lines) + "\n"
 
@@ -92,13 +95,14 @@ def main(argv=None):
     base = load_params(pack)
     instance, _ = pack.generate(cfg["data"]["seed"], cfg["data"]["faults"])
     result = compare(base, instance, cfg["candidates"], worlds, flow["seeds"], flow["promise_window_min"])
-    recs = [{**recommendation(result, list(PROFILES), key, flow["min_profiles_agree"]), "label": label}
-            for key, label in (("promise_kept_rate", "약속 준수"), ("completed_no_complaint", "불만 없이 완료"))]
+    tie = flow["tie_margin_pp"] / 100
+    recs = [{**recommendation(result, list(PROFILES), key, flow["min_profiles_agree"], tie), "label": label}
+            for key, label in (("promise_kept_rate", "약속 준수"), ("completed_no_complaint_rate", "불만 없이 완료"))]
 
     meta = {"date": date.today().isoformat(), "core_ref": core_ref(), "repo_ref": repo_ref(),
             "data": cfg["data"], "params_version": base["version"], "seeds": flow["seeds"],
             "profiles": list(PROFILES), "promise_window_min": flow["promise_window_min"],
-            "min_profiles_agree": flow["min_profiles_agree"], "llm_model": None, "confirmed_items": [],
+            "min_profiles_agree": flow["min_profiles_agree"], "tie_margin_pp": flow["tie_margin_pp"], "llm_model": None, "confirmed_items": [],
             "json": Path(args.json).relative_to(REPO).as_posix() if Path(args.json).is_relative_to(REPO) else args.json}
     Path(args.json).parent.mkdir(parents=True, exist_ok=True)
     Path(args.json).write_text(json.dumps({"meta": meta, "candidates": cfg["candidates"], "result": result,
