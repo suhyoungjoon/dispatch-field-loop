@@ -16,6 +16,7 @@ REPO = Path(__file__).resolve().parents[1]
 if str(REPO) not in sys.path:                     # streamlit run은 스크립트 폴더만 경로에 넣는다
     sys.path.insert(0, str(REPO))
 
+from flow.demo_llm import DEMO_MODEL  # noqa: E402
 from flow.service import PROFILES, FlowService  # noqa: E402
 
 PROFILE_KO = {"lenient": "관대", "normal": "보통", "sensitive": "민감"}
@@ -23,17 +24,20 @@ STATUS_KO = {"proposed": "제안됨", "confirmed": "확인됨", "rejected": "반
              "approved": "승인됨", "stale": "지난 안", "invalid": "검사 탈락", "checked": "검사 통과",
              "detected": "탐지", "pending": "원인 확인 대기", "missed": "놓침"}
 KIND_KO = {"constraint": "제약", "fact": "사실", "check": "확인 필요", "label": "발견 판정"}
+AI_MODES = {"off": "끔", "demo": "가상 LLM(데모)", "real": "실제 Claude API (비용 발생)"}
+DEMO_BADGE = "데모 결과: 가상 LLM이 미리 정한 응답이다 (실제 AI 판단이 아님)"
 ESTIMATE_PATHS = ["weights.difficulty", "weights.building", "duration.base_min", "travel.avg_speed_kmh"]
 
 st.set_page_config(page_title="현장·실적 개선 흐름", layout="wide")
 
 
 @st.cache_resource
-def service() -> FlowService:
-    return FlowService(root=Path(os.environ.get("FIELD_FLOW_DIR", REPO / "runs" / "flows")))
+def service(root: str) -> FlowService:
+    """저장 위치별로 하나 (위치가 바뀌면 다른 서비스)."""
+    return FlowService(root=Path(root))
 
 
-svc = service()
+svc = service(str(os.environ.get("FIELD_FLOW_DIR", REPO / "runs" / "flows")))
 
 
 def pct(x) -> str:
@@ -52,12 +56,21 @@ def call(fn, *args, success: str | None = None, **kwargs):
         return None
 
 
+def ai_on() -> bool:
+    return st.session_state.get("ai_mode", "off") != "off"
+
+
 def llm_for(role: str):
-    if not st.session_state.get("use_api"):
-        st.warning("실제 Claude API 사용이 꺼져 있습니다. 왼쪽에서 켜야 이 단계를 실행할 수 있습니다.")
-        return None
-    from flow.llm import make_llm
-    return make_llm(role)
+    """AI 사용 모드에 맞는 (llm, config). 끔이면 None."""
+    mode = st.session_state.get("ai_mode", "off")
+    if mode == "demo":
+        from flow.demo_llm import make_demo_llm
+        return make_demo_llm(role)
+    if mode == "real":
+        from flow.llm import make_llm
+        return make_llm(role)
+    st.warning("AI 사용이 꺼져 있습니다. 왼쪽에서 가상 LLM(데모) 또는 실제 Claude API를 골라야 이 단계를 실행할 수 있습니다.")
+    return None
 
 
 # --- 사이드바: 흐름 선택·생성, API 사용 ---------------------------------------------------------
@@ -88,8 +101,10 @@ with st.sidebar:
                     st.rerun()
 
     st.header("AI 사용")
-    st.session_state["use_api"] = st.checkbox("실제 Claude API 사용 (비용 발생)", value=False,
-                                              help="분석·현장 대화·AI 개선안 단계에서 실제 API를 부른다. 끄면 그 단계만 막힌다.")
+    st.session_state["ai_mode"] = st.radio(
+        "분석·현장 대화·AI 개선안 단계", list(AI_MODES), format_func=AI_MODES.get, key="ai_mode_choice",
+        help="끔: 그 단계만 막힌다. 가상 LLM(데모): API 키 없이 미리 정한 응답으로 흐름을 돌려 본다. "
+             "실제 Claude API: settings/llm.yaml의 모델을 부른다 (비용 발생).")
     st.session_state["person"] = st.text_input("내 이름 (확인·승인자)", st.session_state.get("person", ""))
 
 flow_id = st.session_state.get("flow_id")
@@ -103,6 +118,9 @@ person = st.session_state.get("person", "")
 st.title(f"{state['name']}")
 st.caption(f"{state['id']} · 현실 모델 {PROFILE_KO[state['config']['profile']]} · params v{state['meta']['params_version']} "
            f"· 확인된 항목 {len(state['meta']['confirmed_items'])}개")
+if st.session_state.get("ai_mode") == "demo":
+    st.info("가상 LLM(데모) 모드: 분석·현장 대화·AI 개선안은 미리 정한 응답이다. 흐름을 돌려 보는 용도이며, "
+            f"실행 메타데이터에 모델명 '{DEMO_MODEL}'로 남는다.")
 
 tabs = st.tabs(["① 계획·실적", "② 분석", "③ 현장 대화", "④ 개선안·시뮬레이션", "⑤ 승인·이력", "⑥ 실행 정보"])
 
@@ -132,7 +150,7 @@ with tabs[0]:
 # --- ② 분석 --------------------------------------------------------------------------------------
 with tabs[1]:
     st.write("분석 agent가 계획 집계와 실적 집계 도구로 패턴을 찾는다. 수치 근거가 없는 발견은 코드가 뺀다.")
-    if st.button("분석 실행", disabled=not st.session_state.get("use_api")):
+    if st.button("분석 실행", disabled=not ai_on()):
         made = llm_for("analysis")
         if made:
             with st.spinner("분석 중"):
@@ -140,6 +158,8 @@ with tabs[1]:
             st.rerun()
     report = state.get("report")
     if report:
+        if state["meta"]["llm_models"].get("analysis") == DEMO_MODEL:
+            st.warning(DEMO_BADGE)
         st.markdown(f"**요약**: {report.get('summary', '')}")
         st.dataframe(pd.DataFrame([{"id": f["id"], "제목": f["title"], "설명": f["description"],
                                     "구간": json.dumps(f.get("slice") or {}, ensure_ascii=False),
@@ -166,10 +186,12 @@ with tabs[2]:
         for t in state["transcript"]:
             with st.chat_message("user" if t["role"] == "field" else "assistant"):
                 st.markdown(f"**{t['speaker']}**: {t['text']}")
+                if t.get("model") == DEMO_MODEL:
+                    st.caption(DEMO_BADGE)
                 if t.get("reply_problems"):
                     st.warning("근거 확인 필요: " + "; ".join(t["reply_problems"]))
         speaker = st.text_input("말하는 사람", "현장 담당자", key="speaker")
-        text = st.chat_input("현장 의견", disabled=not st.session_state.get("use_api"))
+        text = st.chat_input("현장 의견", disabled=not ai_on())
         if text:
             made = llm_for("dialogue")
             if made:
@@ -203,7 +225,7 @@ with tabs[3]:
     a, b = st.columns(2)
     with a:
         st.write("AI 개선안: 분석 리포트와 **확인된 제약**을 넣어 코어 개선 agent를 부른다.")
-        if st.button("AI 개선안 받기", disabled=not st.session_state.get("use_api") or not state.get("report")):
+        if st.button("AI 개선안 받기", disabled=not ai_on() or not state.get("report")):
             made = llm_for("proposals")
             if made:
                 with st.spinner("개선안을 만드는 중"):
@@ -229,6 +251,8 @@ with tabs[3]:
         body = p["body"]
         with st.expander(f"{p['id']} · {body.get('title', '')} · {STATUS_KO.get(p['status'], p['status'])} · {p['source']}",
                          expanded=p["status"] in ("proposed", "simulated")):
+            if DEMO_MODEL in p["source"]:
+                st.caption(DEMO_BADGE)
             st.code(json.dumps({k: body.get(k) for k in ("params_changes", "override_rules", "rationale") if body.get(k)},
                                ensure_ascii=False, indent=1), language="json")
             if p["errors"]:

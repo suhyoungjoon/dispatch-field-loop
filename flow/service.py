@@ -162,7 +162,7 @@ class FlowService:
                               decisions=c["decisions"], records=c["records"],
                               report=state.get("report") or {"findings": []}, promise_window_min=self.window)
         turn = run_dialogue_turn(ctx, state["transcript"], llm, llm_config, store=self._items(flow_id))
-        state["transcript"].append({"role": "agent", "speaker": "AI", "text": turn["reply"], "ts": _now(),
+        state["transcript"].append({"role": "agent", "speaker": "AI", "text": turn["reply"], "ts": _now(), "model": llm.model,
                                     "item_ids": [i["id"] for i in turn["items"]],
                                     "reply_problems": turn["reply_problems"], "dropped_items": turn["dropped_items"]})
         state["meta"]["llm_models"]["dialogue"] = llm.model
@@ -193,7 +193,7 @@ class FlowService:
         constraints = self._items(flow_id).constraints()
         out = propose(get_pack, c["instance"], c["params"], spec_text, c["pack"].dimensions(), state["report"],
                       llm, llm_config, max_calls=max_calls, constraints=constraints)
-        added = [self._add_proposal(state, p["proposal"], p["errors"], source="ai") for p in out["proposals"]]
+        added = [self._add_proposal(state, p["proposal"], p["errors"], source=f"ai ({llm.model})") for p in out["proposals"]]
         state["meta"]["llm_models"]["proposals"] = llm.model
         self.store.save(state)
         return added
